@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>TP-7 Field Recorder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{
+  background:#111;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Inter',system-ui,sans-serif;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+/* ── Device Shell ── */
+.device{
+  width:340px; height:530px;
+  background:linear-gradient(172deg,#e2e2e2 0%,#d6d6d6 25%,#cdcdcd 50%,#c4c4c4 75%,#bcbcbc 100%);
+  border-radius:18px;
+  position:relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 -1px 0 rgba(0,0,0,.08),
+    0 2px 4px rgba(0,0,0,.15),
+    0 8px 24px rgba(0,0,0,.25),
+    0 24px 60px rgba(0,0,0,.35);
+  overflow:visible;
+}
+
+/* Brushed-metal texture overlay */
+.device::before{
+  content:'';position:absolute;inset:0;border-radius:18px;
+  background:repeating-linear-gradient(
+    90deg,
+    transparent,transparent 1px,
+    rgba(255,255,255,.02) 1px,rgba(255,255,255,.02) 2px
+  );
+  pointer-events:none;z-index:1;
+}
+
+/* ── Top Row ── */
+.top-row{
+  display:flex;justify-content:space-between;align-items:flex-start;
+  padding:18px 20px 0;position:relative;z-index:2;
+}
+.model-label{
+  font-family:'Inter',sans-serif;font-weight:700;font-size:15px;
+  color:#666;letter-spacing:.3px;
+}
+
+/* ── OLED Display ── */
+.display{
+  background:#0a0a0a;border-radius:5px;
+  padding:6px 10px;min-width:116px;
+  box-shadow:inset 0 1px 4px rgba(0,0,0,.6),0 1px 0 rgba(255,255,255,.15);
+}
+.display-label{
+  font-family:'Space Mono',monospace;font-weight:700;font-size:11.5px;
+  color:#f0f0f0;letter-spacing:1px;line-height:1;
+}
+.display-bottom{display:flex;align-items:center;gap:8px;margin-top:3px}
+.display-time{
+  font-family:'Space Mono',monospace;font-size:10.5px;
+  color:#888;letter-spacing:.5px;
+}
+.display-track{
+  font-family:'Space Mono',monospace;font-size:9px;font-weight:700;
+  color:#e0e0e0;background:#2a2a2a;
+  padding:2px 5px;border-radius:3px;
+  border:1px solid #3a3a3a;
+  line-height:1;
+}
+
+/* ── Dots ── */
+.dots{
+  position:absolute;top:24px;left:50%;transform:translateX(-50%);
+  display:flex;gap:10px;z-index:2;
+}
+.dot{
+  width:4px;height:4px;border-radius:50%;
+  background:#aaa;
+  box-shadow:inset 0 .5px 1px rgba(0,0,0,.3);
+  transition:all .3s;
+}
+.dot.on{
+  background:#ff5500;
+  box-shadow:0 0 6px 1px rgba(255,85,0,.5);
+}
+
+/* ── M Badge ── */
+.m-badge{
+  position:absolute;top:18px;right:140px;z-index:3;
+  width:20px;height:20px;
+  background:#ff5500;border-radius:4px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Inter',sans-serif;font-weight:800;font-size:10px;color:#fff;
+  cursor:pointer;
+  box-shadow:0 1px 3px rgba(255,85,0,.3);
+  transition:transform .1s,box-shadow .1s;
+}
+.m-badge:active{transform:scale(.88);box-shadow:0 0 1px rgba(255,85,0,.2)}
+
+/* ── Main Disc ── */
+.disc-wrap{
+  width:264px;height:264px;
+  margin:10px auto 0;
+  position:relative;z-index:2;
+}
+#discCanvas{width:100%;height:100%;cursor:grab;display:block}
+#discCanvas:active{cursor:grabbing}
+
+/* ── Side Buttons (left) ── */
+.side-btns{
+  position:absolute;left:0;top:50%;transform:translateY(-55%);
+  display:flex;flex-direction:column;gap:1px;z-index:4;
+}
+.side-btn{
+  width:18px;height:36px;
+  background:linear-gradient(90deg,#bbb,#ccc);
+  border:none;cursor:pointer;
+  border-radius:0 5px 5px 0;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:inset -1px 0 0 rgba(255,255,255,.2),1px 0 2px rgba(0,0,0,.1);
+  transition:background .08s;
+}
+.side-btn:active{background:linear-gradient(90deg,#aaa,#bbb)}
+.side-btn svg{width:8px;height:8px;fill:#777}
+
+/* ── Side Slider (R indicator) ── */
+.r-label{
+  position:absolute;left:10px;top:310px;
+  font-family:'Inter',sans-serif;font-size:8px;font-weight:600;
+  color:#999;z-index:3;
+}
+
+/* ── +/- Buttons ── */
+.pm-btns{
+  position:absolute;right:16px;top:50%;transform:translateY(20%);
+  display:flex;flex-direction:column;gap:4px;z-index:3;
+}
+.pm-btn{
+  width:28px;height:28px;border-radius:50%;border:none;
+  background:linear-gradient(145deg,#ddd,#c0c0c0);
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;color:#666;font-weight:300;
+  box-shadow:0 1px 3px rgba(0,0,0,.15),inset 0 1px 0 rgba(255,255,255,.4);
+  transition:transform .08s;
+  line-height:1;
+}
+.pm-btn:active{transform:scale(.9);box-shadow:inset 0 1px 2px rgba(0,0,0,.15)}
+
+/* ── VU Meter ── */
+.vu-wrap{width:280px;height:24px;margin:10px auto 0;position:relative;z-index:2}
+#vuCanvas{width:100%;height:100%;display:block}
+
+/* ── Transport Buttons ── */
+.transport{
+  display:flex;gap:0;margin:8px 20px 0;height:68px;
+  border-radius:8px;overflow:hidden;
+  box-shadow:0 1px 3px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.25);
+}
+.t-btn{
+  flex:1;border:none;cursor:pointer;
+  background:linear-gradient(180deg,#ddd 0%,#d0d0d0 40%,#c2c2c2 100%);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+  transition:background .06s;
+}
+.t-btn+.t-btn{border-left:1px solid rgba(0,0,0,.06)}
+.t-btn:active{background:linear-gradient(180deg,#ccc 0%,#c0c0c0 40%,#b5b5b5 100%)}
+
+/* Record dot */
+.rec-dot{
+  width:13px;height:13px;border-radius:50%;
+  background:#ff5500;
+  transition:all .3s;
+}
+.t-btn.recording .rec-dot{
+  background:#ff2200;
+  box-shadow:0 0 14px rgba(255,34,0,.6);
+  animation:pulse 1s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.t-btn svg{width:15px;height:15px;fill:#555}
+.t-btn.playing svg{fill:#333}
+
+/* ── Speaker Grille ── */
+.grille{
+  position:absolute;right:14px;bottom:62px;
+  display:flex;flex-direction:column;gap:5px;z-index:2;
+}
+.grille-line{
+  width:26px;height:1.5px;
+  background:linear-gradient(90deg,#b0b0b0,#bbb,#b0b0b0);
+  border-radius:1px;
+}
+
+/* ── Volume Knob ── */
+.knob-area{position:absolute;bottom:10px;right:8px;z-index:5}
+.knob{
+  width:42px;height:42px;border-radius:50%;
+  background:conic-gradient(from 0deg,#ccc,#bbb,#ccc,#bbb,#ccc,#bbb,#ccc,#bbb,#ccc);
+  border:2px solid #a8a8a8;
+  cursor:grab;position:relative;
+  box-shadow:0 2px 8px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.3);
+}
+.knob::after{
+  content:'';position:absolute;top:5px;left:50%;
+  transform:translateX(-50%);
+  width:2px;height:9px;background:#777;border-radius:1px;
+}
+.knob:active{cursor:grabbing}
+
+/* ── Waveform (shown during playback/scrub) ── */
+.wave-wrap{
+  position:absolute;bottom:84px;left:20px;right:58px;height:22px;
+  opacity:0;transition:opacity .3s;pointer-events:none;z-index:2;
+}
+.wave-wrap.show{opacity:1}
+#waveCanvas{width:100%;height:100%;display:block}
+
+/* ── Scrub/Pause indicators ── */
+.disc-wrap.scrubbing #discCanvas{cursor:grabbing}
+.disc-wrap.paused-rec::after{
+  content:'OFF THE RECORD';
+  position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);
+  font-family:'Space Mono',monospace;font-size:8px;letter-spacing:1.5px;
+  color:#ff5500;white-space:nowrap;
+  animation:blink .8s ease-in-out infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Speed indicator ring */
+.speed-ring{
+  position:absolute;inset:-4px;border-radius:50%;
+  border:2px solid transparent;
+  pointer-events:none;transition:border-color .2s;
+}
+.speed-ring.ff{border-color:rgba(255,85,0,.4)}
+.speed-ring.rew{border-color:rgba(100,160,255,.4)}
+
+/* ── Tape Library ── */
+.backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);
+  opacity:0;pointer-events:none;transition:opacity .3s;z-index:90;
+}
+.backdrop.show{opacity:1;pointer-events:auto}
+
+.library{
+  position:fixed;bottom:0;left:0;right:0;
+  max-height:55vh;
+  background:#0f0f0f;
+  border-radius:16px 16px 0 0;
+  padding:16px 20px 24px;
+  transform:translateY(100%);
+  transition:transform .4s cubic-bezier(.16,1,.3,1);
+  z-index:100;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.library.open{transform:translateY(0)}
+
+.lib-handle{
+  width:36px;height:4px;background:#333;border-radius:2px;
+  margin:0 auto 14px;
+}
+.library h3{
+  font-family:'Space Mono',monospace;font-size:11px;
+  color:#666;text-transform:uppercase;letter-spacing:2px;
+  margin-bottom:12px;
+}
+
+.tape-list{display:flex;flex-direction:column;gap:6px}
+.tape-item{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 12px;background:#181818;border-radius:8px;
+  cursor:pointer;transition:background .15s;
+  border:1px solid transparent;
+}
+.tape-item:hover{background:#1e1e1e}
+.tape-item.active{border-color:#ff5500;background:#1a1208}
+
+.tape-icon{
+  width:30px;height:30px;background:#252525;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.tape-icon svg{width:14px;height:14px}
+.tape-info{flex:1;min-width:0}
+.tape-name{
+  font-family:'Space Mono',monospace;font-size:11px;color:#ddd;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tape-meta{font-size:10px;color:#555;margin-top:1px}
+.tape-actions{display:flex;gap:6px;flex-shrink:0}
+.tape-act{
+  width:26px;height:26px;border:none;background:#282828;border-radius:4px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:background .15s;
+}
+.tape-act:hover{background:#383838}
+.tape-act svg{width:11px;height:11px}
+
+.new-tape{
+  width:100%;padding:10px;margin-top:8px;
+  background:none;border:1px dashed #2a2a2a;border-radius:8px;
+  color:#555;font-family:'Space Mono',monospace;font-size:10px;
+  cursor:pointer;transition:all .2s;
+}
+.new-tape:hover{border-color:#ff5500;color:#ff5500}
+
+/* ── Toast ── */
+.toast{
+  position:fixed;top:16px;left:50%;
+  transform:translateX(-50%) translateY(-50px);
+  background:#1a1a1a;color:#eee;border:1px solid #2a2a2a;
+  font-family:'Space Mono',monospace;font-size:10px;
+  padding:6px 14px;border-radius:16px;
+  transition:transform .3s cubic-bezier(.16,1,.3,1);
+  z-index:200;pointer-events:none;
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ── Responsive ── */
+@media(max-height:580px){.device{transform:scale(.82);transform-origin:center}}
+@media(max-width:360px){.device{width:310px;height:490px}}
+</style>
+</head>
+<body>
+
+<div class="device" id="device">
+  <!-- Top Row -->
+  <div class="top-row">
+    <span class="model-label">TP-7</span>
+    <div class="display">
+      <div class="display-label" id="dLabel">TODAY</div>
+      <div class="display-bottom">
+        <span class="display-time" id="dTime">0.00.00</span>
+        <span class="display-track" id="dTrack">01</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dots">
+    <div class="dot" id="dot0"></div>
+    <div class="dot" id="dot1"></div>
+  </div>
+
+  <div class="m-badge" id="mBadge">M</div>
+
+  <!-- Disc -->
+  <div class="disc-wrap" id="discWrap">
+    <div class="speed-ring" id="speedRing"></div>
+    <canvas id="discCanvas" width="528" height="528"></canvas>
+  </div>
+
+  <!-- Left side buttons -->
+  <div class="side-btns">
+    <button class="side-btn" id="bPrev" title="Previous">
+      <svg viewBox="0 0 10 12"><path d="M8 1L3 6l5 5" stroke="#777" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="side-btn" id="bNext" title="Next">
+      <svg viewBox="0 0 10 12"><path d="M2 1l5 5-5 5" stroke="#777" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <span class="r-label">R</span>
+
+  <!-- +/- -->
+  <div class="pm-btns">
+    <button class="pm-btn" id="bPlus">+</button>
+    <button class="pm-btn" id="bMinus">&minus;</button>
+  </div>
+
+  <!-- VU Meter -->
+  <div class="vu-wrap">
+    <canvas id="vuCanvas" width="560" height="48"></canvas>
+  </div>
+
+  <!-- Waveform -->
+  <div class="wave-wrap" id="waveWrap">
+    <canvas id="waveCanvas" width="520" height="44"></canvas>
+  </div>
+
+  <!-- Transport -->
+  <div class="transport">
+    <button class="t-btn" id="bRec"><div class="rec-dot"></div></button>
+    <button class="t-btn" id="bPlay">
+      <svg viewBox="0 0 16 16"><polygon points="3,1 14,8 3,15"/></svg>
+    </button>
+    <button class="t-btn" id="bStop">
+      <svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/></svg>
+    </button>
+  </div>
+
+  <!-- Grille -->
+  <div class="grille">
+    <div class="grille-line"></div>
+    <div class="grille-line"></div>
+    <div class="grille-line"></div>
+    <div class="grille-line"></div>
+    <div class="grille-line"></div>
+  </div>
+
+  <!-- Volume Knob -->
+  <div class="knob-area">
+    <div class="knob" id="knob"></div>
+  </div>
+</div>
+
+<!-- Library -->
+<div class="backdrop" id="backdrop"></div>
+<div class="library" id="library">
+  <div class="lib-handle"></div>
+  <h3>Tape Library</h3>
+  <div class="tape-list" id="tapeList"></div>
+  <button class="new-tape" id="newTape">+ New Tape</button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  TP-7 FIELD RECORDER — with functional reel
+// ═══════════════════════════════════════════════
+
+const $ = id => document.getElementById(id);
+
+const S = { IDLE:'idle', REC:'rec', PLAY:'play', SCRUB:'scrub' };
+
+class TP7 {
+  constructor() {
+    this.state = S.IDLE;
+    this.tapes = [];
+    this.tapeId = null;
+    this.recStart = 0;
+    this.recElapsed = 0;
+    this.recPaused = false;       // "off the record" state
+    this.recPauseTotal = 0;       // total ms spent paused during recording
+    this.recPauseStart = 0;       // when current pause began
+    this.playStart = 0;
+    this.playOff = 0;             // playback offset in seconds
+    this.vol = .8;
+    this.angle = 0;
+    this.speed = 0;
+    this.targetSpeed = 0;
+    this.vu = 0;
+    this.vuTarget = 0;
+
+    // Disc interaction state
+    this.discDrag = false;
+    this.discVelocity = 0;        // degrees per frame (smoothed)
+    this.discVelSamples = [];     // recent angular deltas for velocity calc
+    this.discMomentum = 0;        // momentum after release (for FF/REW)
+    this.discLastAngle = 0;       // last angle from pointer
+    this.scrubPos = 0;            // current scrub position in seconds
+    this.wasScrubbing = false;    // was the user scrubbing before release?
+    this.wasPlayingBeforeScrub = false;
+    this.libScrollAccum = 0;      // accumulated scroll for library
+
+    // Audio nodes
+    this.ctx = null;
+    this.gain = null;
+    this.analyser = null;
+    this.stream = null;
+    this.recorder = null;
+    this.chunks = [];
+    this.src = null;
+    this.buf = null;              // decoded AudioBuffer for current tape
+
+    // Canvas contexts
+    this.dCtx = $('discCanvas').getContext('2d');
+    this.vCtx = $('vuCanvas').getContext('2d');
+    this.wCtx = $('waveCanvas').getContext('2d');
+
+    this.initDB().then(() => {
+      this.loadTapes().then(() => {
+        this.bind();
+        this.loop();
+      });
+    });
+  }
+
+  // ─── IndexedDB ───
+  initDB() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('TP7', 2);
+      r.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('tapes'))
+          db.createObjectStore('tapes', { keyPath: 'id' });
+      };
+      r.onsuccess = e => { this.db = e.target.result; res(); };
+      r.onerror = () => rej(r.error);
+    });
+  }
+
+  store(mode) { return this.db.transaction('tapes', mode).objectStore('tapes'); }
+
+  put(tape) {
+    return new Promise((res, rej) => {
+      const r = this.store('readwrite').put(tape);
+      r.onsuccess = () => res(); r.onerror = () => rej(r.error);
+    });
+  }
+
+  del(id) {
+    return new Promise((res, rej) => {
+      const r = this.store('readwrite').delete(id);
+      r.onsuccess = () => res(); r.onerror = () => rej(r.error);
+    });
+  }
+
+  async loadTapes() {
+    return new Promise(res => {
+      const r = this.store('readonly').getAll();
+      r.onsuccess = () => {
+        this.tapes = (r.result || []).sort((a, b) => a.created - b.created);
+        if (!this.tapes.length) this.newTape();
+        else this.tapeId = this.tapes[0].id;
+        this.updDisplay();
+        res();
+      };
+    });
+  }
+
+  newTape() {
+    const t = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      name: 'TAPE ' + String(this.tapes.length + 1).padStart(2, '0'),
+      created: Date.now(), dur: 0, blob: null, wave: null
+    };
+    this.tapes.push(t);
+    this.tapeId = t.id;
+    this.put(t);
+    this.updDisplay();
+    return t;
+  }
+
+  tape() { return this.tapes.find(t => t.id === this.tapeId); }
+  tapeIdx() { return this.tapes.findIndex(t => t.id === this.tapeId); }
+
+  // ─── Audio ───
+  async initAudio() {
+    if (this.ctx) return;
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.gain = this.ctx.createGain();
+    this.gain.gain.value = this.vol;
+    this.gain.connect(this.ctx.destination);
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 256;
+    this.analyser.smoothingTimeConstant = .65;
+  }
+
+  mimeType() {
+    for (const t of ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'])
+      if (MediaRecorder.isTypeSupported(t)) return t;
+    return '';
+  }
+
+  // Decode and cache the AudioBuffer for current tape
+  async ensureBuffer() {
+    const tape = this.tape();
+    if (!tape?.blob) return null;
+    if (this.buf && this._bufTapeId === tape.id) return this.buf;
+    await this.initAudio();
+    try {
+      const ab = await tape.blob.arrayBuffer();
+      this.buf = await this.ctx.decodeAudioData(ab);
+      this._bufTapeId = tape.id;
+      return this.buf;
+    } catch { return null; }
+  }
+
+  async rec() {
+    await this.initAudio();
+    if (this.ctx.state === 'suspended') await this.ctx.resume();
+    try { this.stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { this.toast('Mic access denied'); return; }
+
+    this._recSource = this.ctx.createMediaStreamSource(this.stream);
+    this._recSource.connect(this.analyser);
+
+    this.chunks = [];
+    this.recorder = new MediaRecorder(this.stream, { mimeType: this.mimeType() });
+    this.recorder.ondataavailable = e => { if (e.data.size) this.chunks.push(e.data); };
+    this.recorder.onstop = () => this.onRecDone();
+    this.recorder.start(100);
+
+    this.state = S.REC;
+    this.recStart = performance.now();
+    this.recElapsed = 0;
+    this.recPaused = false;
+    this.recPauseTotal = 0;
+    this.targetSpeed = 2.5;
+    $('bRec').classList.add('recording');
+    $('dot0').classList.add('on');
+    $('dLabel').textContent = 'REC';
+    this.toast('Recording...');
+  }
+
+  // Pause recording ("off the record") — called when touching disc during rec
+  pauseRec() {
+    if (this.state !== S.REC || this.recPaused) return;
+    if (this.recorder?.state === 'recording') this.recorder.pause();
+    this.recPaused = true;
+    this.recPauseStart = performance.now();
+    this.targetSpeed = 0;
+    $('discWrap').classList.add('paused-rec');
+    $('dLabel').textContent = 'PAUSE';
+    $('dot0').classList.remove('on');
+  }
+
+  // Resume recording — called when releasing disc during rec
+  resumeRec() {
+    if (this.state !== S.REC || !this.recPaused) return;
+    if (this.recorder?.state === 'paused') this.recorder.resume();
+    this.recPauseTotal += performance.now() - this.recPauseStart;
+    this.recPaused = false;
+    this.targetSpeed = 2.5;
+    $('discWrap').classList.remove('paused-rec');
+    $('dLabel').textContent = 'REC';
+    $('dot0').classList.add('on');
+    this.toast('Resumed');
+  }
+
+  stopRec() {
+    if (this.recPaused) {
+      // If paused, resume briefly so recorder can finalize
+      if (this.recorder?.state === 'paused') this.recorder.resume();
+      this.recPauseTotal += performance.now() - this.recPauseStart;
+      this.recPaused = false;
+    }
+    if (this.recorder?.state !== 'inactive') this.recorder?.stop();
+    this.stream?.getTracks().forEach(t => t.stop());
+    this.stream = null;
+    this.state = S.IDLE;
+    this.targetSpeed = 0;
+    $('bRec').classList.remove('recording');
+    $('dot0').classList.remove('on');
+    $('discWrap').classList.remove('paused-rec');
+    $('dLabel').textContent = 'TODAY';
+  }
+
+  async onRecDone() {
+    const blob = new Blob(this.chunks, { type: this.chunks[0]?.type || 'audio/webm' });
+    const tape = this.tape();
+    if (!tape) return;
+    tape.blob = blob;
+    tape.dur = this.recElapsed;
+    this._bufTapeId = null; // invalidate buffer cache
+    try {
+      const ab = await blob.arrayBuffer();
+      const audio = await this.ctx.decodeAudioData(ab);
+      tape.wave = this.makeWave(audio);
+    } catch { tape.wave = null; }
+    await this.put(tape);
+    this.updDisplay();
+    this.toast('Saved');
+  }
+
+  makeWave(buf) {
+    const raw = buf.getChannelData(0);
+    const n = 200, bs = Math.floor(raw.length / n), out = [];
+    for (let i = 0; i < n; i++) {
+      let s = 0;
+      for (let j = 0; j < bs; j++) s += Math.abs(raw[i * bs + j]);
+      out.push(s / bs);
+    }
+    const mx = Math.max(...out) || 1;
+    return out.map(v => v / mx);
+  }
+
+  // Start or restart playback from a given offset
+  async playFrom(offsetSec) {
+    const buf = await this.ensureBuffer();
+    if (!buf) { this.toast('Empty tape'); return; }
+    await this.initAudio();
+    if (this.ctx.state === 'suspended') await this.ctx.resume();
+
+    // Kill existing source
+    this._killSource();
+
+    offsetSec = Math.max(0, Math.min(offsetSec, buf.duration));
+    this.playOff = offsetSec;
+
+    this.src = this.ctx.createBufferSource();
+    this.src.buffer = buf;
+    this.src.connect(this.analyser);
+    this.analyser.connect(this.gain);
+    this.src.onended = () => { if (this.state === S.PLAY) this.stop(); };
+    this.src.start(0, offsetSec);
+
+    this.state = S.PLAY;
+    this.playStart = performance.now() - offsetSec * 1000;
+    this.targetSpeed = 2.5;
+    $('bPlay').classList.add('playing');
+    $('dot1').classList.add('on');
+    $('dLabel').textContent = 'PLAY';
+    $('waveWrap').classList.add('show');
+  }
+
+  async play() {
+    await this.playFrom(this.playOff);
+  }
+
+  _killSource() {
+    if (this.src) {
+      try { this.src.stop(); } catch {}
+      try { this.src.disconnect(); } catch {}
+      this.src = null;
+    }
+    if (this._scrubEnv) {
+      try {
+        const now = this.ctx.currentTime;
+        this._scrubEnv.gain.cancelScheduledValues(now);
+        this._scrubEnv.gain.setValueAtTime(this._scrubEnv.gain.value, now);
+        this._scrubEnv.gain.linearRampToValueAtTime(0, now + 0.01);
+      } catch {}
+      this._scrubEnv = null;
+    }
+    if (this._scrubSrc) {
+      const s = this._scrubSrc; this._scrubSrc = null;
+      setTimeout(() => { try { s.stop(); } catch {} }, 15);
+    }
+    try { this.analyser?.disconnect(); } catch {}
+  }
+
+  // Play a short audio grain at the given position for scrub sound
+  _scrubGrain(pos, speed) {
+    if (!this.buf || !this.ctx) return;
+    const dur = this.buf.duration;
+    const absSpeed = Math.min(Math.abs(speed), 4);
+    if (absSpeed < 0.01) return;
+
+    const now = this.ctx.currentTime;
+
+    // Throttle: don't fire a new grain if the last one just started
+    if (this._scrubLastTime && now - this._scrubLastTime < 0.04) return;
+    this._scrubLastTime = now;
+
+    // Fade out previous grain smoothly instead of hard-stopping
+    if (this._scrubEnv) {
+      try {
+        this._scrubEnv.gain.cancelScheduledValues(now);
+        this._scrubEnv.gain.setValueAtTime(this._scrubEnv.gain.value, now);
+        this._scrubEnv.gain.linearRampToValueAtTime(0, now + 0.015);
+      } catch {}
+      // Schedule stop after fade
+      const oldSrc = this._scrubSrc;
+      if (oldSrc) setTimeout(() => { try { oldSrc.stop(); } catch {} }, 20);
+    }
+
+    const grainDur = 0.06 + absSpeed * 0.02; // 60-140ms depending on speed
+    pos = Math.max(0, Math.min(pos, dur - grainDur));
+    const vol = Math.min(0.5, absSpeed * 0.3); // softer overall, scales with speed
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.buf;
+    src.playbackRate.value = Math.max(0.4, Math.min(absSpeed * 0.8, 2.5));
+
+    // Gentle envelope: longer attack/release to prevent clicks
+    const env = this.ctx.createGain();
+    env.gain.setValueAtTime(0, now);
+    env.gain.linearRampToValueAtTime(vol, now + 0.012);
+    env.gain.setValueAtTime(vol, now + grainDur - 0.015);
+    env.gain.linearRampToValueAtTime(0, now + grainDur);
+
+    // Low-pass filter to soften harsh transients
+    const lpf = this.ctx.createBiquadFilter();
+    lpf.type = 'lowpass';
+    lpf.frequency.value = 2000 + absSpeed * 3000; // opens up with speed
+
+    src.connect(lpf);
+    lpf.connect(env);
+    env.connect(this.gain);
+    src.start(0, pos, grainDur + 0.01);
+
+    this._scrubSrc = src;
+    this._scrubEnv = env;
+    src.onended = () => {
+      if (this._scrubSrc === src) { this._scrubSrc = null; this._scrubEnv = null; }
+      try { lpf.disconnect(); } catch {}
+      try { env.disconnect(); } catch {}
+    };
+  }
+
+  // Get current playback position in seconds
+  getPlayPos() {
+    if (this.state === S.PLAY) {
+      return (performance.now() - this.playStart) / 1000;
+    }
+    return this.playOff;
+  }
+
+  // Get tape duration in seconds
+  getTapeDur() {
+    if (this.buf && this._bufTapeId === this.tape()?.id) return this.buf.duration;
+    const tape = this.tape();
+    return tape?.dur ? tape.dur / 1000 : 0;
+  }
+
+  stop() {
+    if (this.state === S.REC) { this.stopRec(); }
+    else if (this.state === S.PLAY || this.state === S.SCRUB) {
+      this._killSource();
+    }
+    this.state = S.IDLE;
+    this.playOff = 0;
+    this.targetSpeed = 0;
+    this.vuTarget = 0;
+    this.discMomentum = 0;
+    $('bPlay').classList.remove('playing');
+    $('bRec').classList.remove('recording');
+    $('dot0').classList.remove('on');
+    $('dot1').classList.remove('on');
+    $('waveWrap').classList.remove('show');
+    $('discWrap').classList.remove('scrubbing');
+    $('discWrap').classList.remove('paused-rec');
+    $('speedRing').className = 'speed-ring';
+    $('dLabel').textContent = 'TODAY';
+    this.updDisplay();
+  }
+
+  setVol(v) {
+    this.vol = Math.max(0, Math.min(1, v));
+    if (this.gain) this.gain.gain.setValueAtTime(this.vol, this.ctx.currentTime);
+  }
+
+  // ─── Disc Scrub / FF / REW logic ───
+
+  // Called each frame during drag with the angular delta in degrees
+  onDiscRotate(deltaDeg) {
+    // Track velocity samples (keep last 6 frames)
+    this.discVelSamples.push(deltaDeg);
+    if (this.discVelSamples.length > 6) this.discVelSamples.shift();
+
+    const libOpen = $('library').classList.contains('open');
+
+    if (libOpen) {
+      // Scroll library menu
+      this.libScrollAccum += deltaDeg;
+      if (Math.abs(this.libScrollAccum) > 15) {
+        const dir = this.libScrollAccum > 0 ? 1 : -1;
+        this.libScrollAccum = 0;
+        $('library').scrollBy({ top: dir * 60, behavior: 'smooth' });
+      }
+      return;
+    }
+
+    if (this.state === S.REC) {
+      // During recording, touching disc pauses — rotation doesn't matter
+      // (pause is handled in onDiscDown/onDiscUp)
+      return;
+    }
+
+    // Scrub through audio during playback or idle (with a recording)
+    const tape = this.tape();
+    const dur = this.getTapeDur();
+    if (!tape?.blob || dur <= 0) return;
+
+    // Convert degrees to seconds: full rotation (360°) = ~3 seconds of audio
+    const secPerDeg = Math.min(dur / 120, 0.03); // cap at 3s/360° or proportional
+    const deltaSec = deltaDeg * secPerDeg;
+
+    if (this.state === S.PLAY) {
+      // Entering scrub mode — pause current playback
+      const currentPos = this.getPlayPos();
+      this._killSource();
+      this.state = S.SCRUB;
+      this.scrubPos = Math.max(0, Math.min(dur, currentPos));
+      this.wasPlayingBeforeScrub = true;
+      this.targetSpeed = 0;
+      $('discWrap').classList.add('scrubbing');
+      $('dLabel').textContent = 'SCRUB';
+      this.ensureBuffer(); // preload buffer for scrub audio
+    }
+
+    if (this.state === S.SCRUB) {
+      this.scrubPos = Math.max(0, Math.min(dur, this.scrubPos + deltaSec));
+      $('dTime').textContent = this.fmtTime(this.scrubPos);
+      this.playOff = this.scrubPos;
+      // Scrub audio grain
+      const scrubSpeed = Math.abs(deltaDeg) / 6; // normalize to ~1 at moderate speed
+      this._scrubGrain(this.scrubPos, scrubSpeed);
+    }
+
+    if (this.state === S.IDLE) {
+      // In idle with a tape — set playback offset (cue point)
+      this.playOff = Math.max(0, Math.min(dur, this.playOff + deltaSec));
+      $('dTime').textContent = this.fmtTime(this.playOff);
+      $('waveWrap').classList.add('show');
+      $('dLabel').textContent = 'CUE';
+      // Scrub audio grain while cueing
+      const scrubSpeed = Math.abs(deltaDeg) / 6;
+      this._scrubGrain(this.playOff, scrubSpeed);
+    }
+  }
+
+  onDiscDown() {
+    this.discDrag = true;
+    this.discVelSamples = [];
+    this.discMomentum = 0;
+    this.wasScrubbing = false;
+    this.wasPlayingBeforeScrub = false;
+
+    // "Off the record" — touching disc during recording pauses it
+    if (this.state === S.REC) {
+      this.pauseRec();
+    }
+    // Preload buffer for scrub audio
+    if (this.state === S.IDLE && this.tape()?.blob) {
+      this.initAudio().then(() => this.ensureBuffer());
+    }
+  }
+
+  onDiscUp() {
+    this.discDrag = false;
+    $('discWrap').classList.remove('scrubbing');
+
+    // "Off the record" — releasing disc resumes recording
+    if (this.state === S.REC && this.recPaused) {
+      this.resumeRec();
+      return;
+    }
+
+    // Calculate release velocity from recent samples
+    const samples = this.discVelSamples;
+    const avgVel = samples.length > 0
+      ? samples.reduce((a, b) => a + b, 0) / samples.length
+      : 0;
+
+    const libOpen = $('library').classList.contains('open');
+    if (libOpen) {
+      // Momentum scroll in library
+      if (Math.abs(avgVel) > 3) {
+        $('library').scrollBy({ top: avgVel * 8, behavior: 'smooth' });
+      }
+      return;
+    }
+
+    // After scrubbing, check if user "flicked" the disc
+    const dur = this.getTapeDur();
+    const isFlick = Math.abs(avgVel) > 8; // threshold for FF/REW
+
+    if (this.state === S.SCRUB) {
+      if (isFlick && dur > 0) {
+        // Fast forward or rewind with momentum
+        this.discMomentum = avgVel;
+        // Resume playback from scrub position — momentum handled in loop
+        this.playFrom(this.scrubPos);
+        this.toast(avgVel > 0 ? 'FF >>' : '<< REW');
+      } else if (this.wasPlayingBeforeScrub) {
+        // Resume from scrub position
+        this.playFrom(this.scrubPos);
+      } else {
+        // Was idle, just set the cue point
+        this.state = S.IDLE;
+        this.playOff = this.scrubPos;
+        $('dLabel').textContent = 'TODAY';
+        this.updDisplay();
+      }
+      return;
+    }
+
+    if (this.state === S.IDLE && dur > 0 && isFlick) {
+      // Flick from idle — jump forward/backward from current offset
+      this.discMomentum = avgVel;
+      const secPerDeg = Math.min(dur / 120, 0.03);
+      const jump = avgVel * secPerDeg * 20;
+      this.playOff = Math.max(0, Math.min(dur, this.playOff + jump));
+      $('dTime').textContent = this.fmtTime(this.playOff);
+      this.toast(avgVel > 0 ? 'FF >>' : '<< REW');
+    }
+
+    // If idle and was cueing, restore display
+    if (this.state === S.IDLE) {
+      setTimeout(() => {
+        if (this.state === S.IDLE) {
+          $('dLabel').textContent = 'TODAY';
+          if (!this.playOff) $('waveWrap').classList.remove('show');
+        }
+      }, 800);
+    }
+  }
+
+  // ─── Export ───
+  async exportWav(id) {
+    const tape = this.tapes.find(t => t.id === id);
+    if (!tape?.blob) { this.toast('Nothing to export'); return; }
+    let out = tape.blob, ext = 'webm';
+    try {
+      await this.initAudio();
+      const ab = await tape.blob.arrayBuffer();
+      const audio = await this.ctx.decodeAudioData(ab);
+      out = this.toWav(audio); ext = 'wav';
+    } catch {}
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(out);
+    a.download = tape.name.replace(/\s+/g, '_') + '.' + ext;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    this.toast('Exported ' + a.download);
+  }
+
+  toWav(buf) {
+    const ch = buf.numberOfChannels, sr = buf.sampleRate;
+    const bps = 16, ba = ch * 2, data = [];
+    for (let i = 0; i < buf.length; i++)
+      for (let c = 0; c < ch; c++) {
+        let s = Math.max(-1, Math.min(1, buf.getChannelData(c)[i]));
+        data.push(s < 0 ? s * 0x8000 : s * 0x7FFF);
+      }
+    const dl = data.length * 2;
+    const ab = new ArrayBuffer(44 + dl);
+    const v = new DataView(ab);
+    const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    ws(0,'RIFF'); v.setUint32(4,36+dl,true); ws(8,'WAVE'); ws(12,'fmt ');
+    v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,ch,true);
+    v.setUint32(24,sr,true); v.setUint32(28,sr*ba,true);
+    v.setUint16(32,ba,true); v.setUint16(34,bps,true);
+    ws(36,'data'); v.setUint32(40,dl,true);
+    let o = 44;
+    for (const s of data) { v.setInt16(o, s, true); o += 2; }
+    return new Blob([ab], { type: 'audio/wav' });
+  }
+
+  // ─── Events ───
+  bind() {
+    $('bRec').onclick = () => {
+      if (this.state === S.IDLE) this.rec();
+      else if (this.state === S.REC) this.stop();
+    };
+    $('bPlay').onclick = () => {
+      if (this.state === S.IDLE) this.play();
+      else if (this.state === S.PLAY) this.stop();
+    };
+    $('bStop').onclick = () => this.stop();
+    $('bPrev').onclick = () => this.prevTape();
+    $('bNext').onclick = () => this.nextTape();
+    $('bPlus').onclick = () => { this.setVol(this.vol + .1); this.updKnob(); };
+    $('bMinus').onclick = () => { this.setVol(this.vol - .1); this.updKnob(); };
+    $('mBadge').onclick = () => this.toggleLib();
+    $('backdrop').onclick = () => this.closeLib();
+    $('newTape').onclick = () => {
+      this.stop(); this.newTape(); this.renderLib(); this.toast('New tape');
+    };
+
+    this.initKnob();
+    this.initDiscDrag();
+    this.updKnob();
+
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space') { e.preventDefault(); this.state === S.IDLE ? this.play() : this.stop(); }
+      if (e.code === 'KeyR') { this.state === S.IDLE ? this.rec() : this.state === S.REC && this.stop(); }
+      if (e.code === 'Escape') { this.stop(); this.closeLib(); }
+      if (e.code === 'ArrowLeft') this.prevTape();
+      if (e.code === 'ArrowRight') this.nextTape();
+    });
+  }
+
+  initKnob() {
+    const el = $('knob');
+    let drag = false, sy;
+    const mv = e => {
+      if (!drag) return;
+      const y = e.touches ? e.touches[0].clientY : e.clientY;
+      this.setVol(this.vol + (sy - y) * .006);
+      sy = y; this.updKnob();
+    };
+    const up = () => drag = false;
+    el.addEventListener('mousedown', e => { drag = true; sy = e.clientY; });
+    el.addEventListener('touchstart', e => { drag = true; sy = e.touches[0].clientY; }, { passive: true });
+    document.addEventListener('mousemove', mv);
+    document.addEventListener('touchmove', mv, { passive: true });
+    document.addEventListener('mouseup', up);
+    document.addEventListener('touchend', up);
+  }
+
+  updKnob() { $('knob').style.transform = `rotate(${-120 + this.vol * 240}deg)`; }
+
+  initDiscDrag() {
+    const c = $('discCanvas');
+    const getAngle = e => {
+      const r = c.getBoundingClientRect();
+      const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left - r.width / 2;
+      const y = (e.touches ? e.touches[0].clientY : e.clientY) - r.top - r.height / 2;
+      return Math.atan2(y, x);
+    };
+
+    const down = e => {
+      this.discLastAngle = getAngle(e);
+      this.onDiscDown();
+    };
+
+    const move = e => {
+      if (!this.discDrag) return;
+      const a = getAngle(e);
+      let d = a - this.discLastAngle;
+      if (d > Math.PI) d -= 2 * Math.PI;
+      if (d < -Math.PI) d += 2 * Math.PI;
+      const deg = d * 180 / Math.PI;
+      this.angle += deg;
+      this.discLastAngle = a;
+      this.onDiscRotate(deg);
+    };
+
+    const up = () => {
+      if (this.discDrag) this.onDiscUp();
+    };
+
+    c.addEventListener('mousedown', down);
+    c.addEventListener('touchstart', e => down(e), { passive: true });
+    document.addEventListener('mousemove', move);
+    document.addEventListener('touchmove', e => move(e), { passive: true });
+    document.addEventListener('mouseup', up);
+    document.addEventListener('touchend', up);
+  }
+
+  prevTape() {
+    if (this.state !== S.IDLE) this.stop();
+    const i = this.tapeIdx();
+    if (i > 0) {
+      this.tapeId = this.tapes[i - 1].id;
+      this._bufTapeId = null; this.buf = null;
+      this.updDisplay(); this.toast(this.tape().name);
+    }
+  }
+
+  nextTape() {
+    if (this.state !== S.IDLE) this.stop();
+    const i = this.tapeIdx();
+    if (i < this.tapes.length - 1) {
+      this.tapeId = this.tapes[i + 1].id;
+      this._bufTapeId = null; this.buf = null;
+      this.updDisplay(); this.toast(this.tape().name);
+    }
+  }
+
+  // ─── Library ───
+  toggleLib() {
+    const open = $('library').classList.contains('open');
+    open ? this.closeLib() : (this.renderLib(), $('library').classList.add('open'), $('backdrop').classList.add('show'));
+  }
+  closeLib() { $('library').classList.remove('open'); $('backdrop').classList.remove('show'); }
+
+  renderLib() {
+    const list = $('tapeList');
+    list.innerHTML = '';
+    for (const tape of this.tapes) {
+      const el = document.createElement('div');
+      el.className = 'tape-item' + (tape.id === this.tapeId ? ' active' : '');
+      const d = this.fmtTime(tape.dur / 1000);
+      el.innerHTML = `
+        <div class="tape-icon"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="#666" stroke-width="1.2"/><circle cx="8" cy="8" r="2" fill="#666"/></svg></div>
+        <div class="tape-info"><div class="tape-name">${tape.name}</div><div class="tape-meta">${tape.blob ? d : 'Empty'} &middot; ${new Date(tape.created).toLocaleDateString()}</div></div>
+        <div class="tape-actions">
+          ${tape.blob ? '<button class="tape-act exp" title="Export"><svg viewBox="0 0 16 16"><path d="M8 2v8M4 7l4 4 4-4M2 13h12" stroke="#888" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : ''}
+          <button class="tape-act rm" title="Delete"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="#888" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+        </div>`;
+      el.addEventListener('click', e => {
+        if (e.target.closest('.tape-act')) return;
+        this.stop(); this.tapeId = tape.id;
+        this._bufTapeId = null; this.buf = null;
+        this.updDisplay(); this.renderLib();
+      });
+      el.querySelector('.exp')?.addEventListener('click', () => this.exportWav(tape.id));
+      el.querySelector('.rm').addEventListener('click', async () => {
+        if (tape.id === this.tapeId) this.stop();
+        this.tapes = this.tapes.filter(t => t.id !== tape.id);
+        await this.del(tape.id);
+        if (!this.tapes.length) this.newTape();
+        if (tape.id === this.tapeId) { this.tapeId = this.tapes[0].id; this._bufTapeId = null; this.buf = null; }
+        this.renderLib(); this.updDisplay(); this.toast('Deleted');
+      });
+      list.appendChild(el);
+    }
+  }
+
+  // ─── Display ───
+  updDisplay() {
+    const t = this.tape(), i = this.tapeIdx();
+    $('dTrack').textContent = String(i + 1).padStart(2, '0');
+    if (this.state === S.IDLE && t)
+      $('dTime').textContent = this.fmtTime(this.playOff || (t.dur || 0) / 1000);
+  }
+
+  fmtTime(s) {
+    if (s < 0) s = 0;
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    const cs = Math.floor((s * 100) % 100);
+    return m + '.' + String(sec).padStart(2, '0') + '.' + String(cs).padStart(2, '0');
+  }
+
+  toast(msg) {
+    const t = $('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(this._tt);
+    this._tt = setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  // ─── Drawing ───
+  drawDisc() {
+    const c = this.dCtx, W = 528, H = 528, cx = W / 2, cy = H / 2, R = 248;
+    c.clearRect(0, 0, W, H);
+
+    // Rotating part
+    c.save();
+    c.translate(cx, cy);
+    c.rotate(this.angle * Math.PI / 180);
+
+    // Disc body
+    const bg = c.createRadialGradient(0, 0, 10, 0, 0, R);
+    bg.addColorStop(0, '#dadada');
+    bg.addColorStop(.2, '#d4d4d4');
+    bg.addColorStop(.6, '#cdcdcd');
+    bg.addColorStop(1, '#c6c6c6');
+    c.beginPath(); c.arc(0, 0, R, 0, Math.PI * 2);
+    c.fillStyle = bg; c.fill();
+
+    // Outer rim
+    c.beginPath(); c.arc(0, 0, R, 0, Math.PI * 2);
+    c.strokeStyle = '#b5b5b5'; c.lineWidth = 2; c.stroke();
+
+    // Grooves
+    c.globalAlpha = .4;
+    for (let r = 35; r < R; r += 8) {
+      c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2);
+      c.strokeStyle = r % 24 === 0 ? 'rgba(0,0,0,.06)' : 'rgba(0,0,0,.025)';
+      c.lineWidth = .5; c.stroke();
+    }
+    c.globalAlpha = 1;
+
+    // Radial line
+    c.beginPath(); c.moveTo(28, 0); c.lineTo(R - 8, 0);
+    c.strokeStyle = 'rgba(0,0,0,.06)'; c.lineWidth = .8; c.stroke();
+
+    // Second radial
+    c.save();
+    c.rotate(240 * Math.PI / 180);
+    c.beginPath(); c.moveTo(28, 0); c.lineTo(R - 8, 0);
+    c.strokeStyle = 'rgba(0,0,0,.04)'; c.lineWidth = .8; c.stroke();
+    c.restore();
+
+    // Center hub
+    const hg = c.createRadialGradient(-3, -3, 0, 0, 0, 26);
+    hg.addColorStop(0, '#e2e2e2');
+    hg.addColorStop(.6, '#d5d5d5');
+    hg.addColorStop(1, '#c5c5c5');
+    c.beginPath(); c.arc(0, 0, 26, 0, Math.PI * 2);
+    c.fillStyle = hg; c.fill();
+    c.strokeStyle = '#b0b0b0'; c.lineWidth = 1.2; c.stroke();
+
+    // Hub screws
+    for (let i = 0; i < 3; i++) {
+      const a = i * 120 * Math.PI / 180;
+      const hx = Math.cos(a) * 12, hy = Math.sin(a) * 12;
+      c.beginPath(); c.arc(hx, hy, 2.5, 0, Math.PI * 2);
+      c.fillStyle = '#b5b5b5'; c.fill();
+      c.beginPath(); c.arc(hx, hy, 2.5, 0, Math.PI * 2);
+      c.strokeStyle = '#a5a5a5'; c.lineWidth = .5; c.stroke();
+      c.beginPath();
+      c.moveTo(hx - 1.5, hy); c.lineTo(hx + 1.5, hy);
+      c.moveTo(hx, hy - 1.5); c.lineTo(hx, hy + 1.5);
+      c.strokeStyle = '#9a9a9a'; c.lineWidth = .6; c.stroke();
+    }
+
+    c.restore();
+
+    // Static overlays
+    c.save();
+    c.font = '500 15px "Space Mono",monospace';
+    c.fillStyle = '#a0a0a0';
+    c.textAlign = 'left';
+    c.fillText('96 / 24', cx - 90, cy - 68);
+
+    const ti = this.tapeIdx() + 1;
+    c.font = '500 14px "Space Mono",monospace';
+    c.fillStyle = '#a8a8a8';
+    c.textAlign = 'right';
+    c.fillText(String(ti), cx + 44, cy + 80);
+
+    c.beginPath(); c.arc(cx + 58, cy + 76, 5.5, 0, Math.PI * 2);
+    c.strokeStyle = '#a8a8a8'; c.lineWidth = 1; c.stroke();
+    c.beginPath(); c.moveTo(cx + 55, cy + 76); c.lineTo(cx + 61, cy + 76);
+    c.strokeStyle = '#a8a8a8'; c.lineWidth = .8; c.stroke();
+
+    c.strokeStyle = '#a8a8a8'; c.lineWidth = 1;
+    c.strokeRect(cx + 72, cy + 68, 18, 18);
+    c.font = '700 11px "Inter",sans-serif';
+    c.fillStyle = '#a8a8a8';
+    c.textAlign = 'center';
+    c.fillText('M', cx + 81, cy + 81);
+
+    c.restore();
+  }
+
+  drawVU() {
+    const c = this.vCtx, W = 560, H = 48;
+    c.clearRect(0, 0, W, H);
+
+    const bg = c.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#d0d0d0');
+    bg.addColorStop(1, '#c4c4c4');
+    c.fillStyle = bg;
+    c.fillRect(0, 0, W, H);
+
+    const N = 48, bw = (W - 30) / N, lev = this.vu;
+
+    for (let i = 0; i < N; i++) {
+      const x = 15 + i * bw;
+      const f = i / N;
+      const on = f < lev;
+      const h = 12 + Math.sin(f * Math.PI) * 6;
+
+      if (on) {
+        c.fillStyle = f > .88 ? '#e02000' : f > .72 ? '#ff5500' : '#555';
+      } else {
+        c.fillStyle = '#bbb';
+      }
+      c.fillRect(x + .5, (H - h) / 2, bw - 1.5, h);
+    }
+
+    c.font = '500 7px "Space Mono",monospace';
+    c.fillStyle = '#999'; c.textAlign = 'center';
+    ['-20','-10','-5','0','+3'].forEach((l, i) => {
+      c.fillText(l, 15 + [.08,.28,.52,.73,.9][i] * (W - 30), H - 3);
+    });
+  }
+
+  drawWave() {
+    const c = this.wCtx, W = 520, H = 44;
+    c.clearRect(0, 0, W, H);
+    const tape = this.tape();
+    if (!tape?.wave) return;
+    const d = tape.wave, bw = W / d.length;
+    const dur = this.getTapeDur();
+    let prog = 0;
+
+    if (this.state === S.PLAY && dur > 0) {
+      prog = Math.min(1, (performance.now() - this.playStart) / 1000 / dur);
+    } else if (this.state === S.SCRUB && dur > 0) {
+      prog = this.scrubPos / dur;
+    } else if (this.state === S.IDLE && dur > 0 && this.playOff > 0) {
+      prog = this.playOff / dur;
+    }
+
+    for (let i = 0; i < d.length; i++) {
+      const x = i * bw;
+      const h = d[i] * H * .85;
+      const f = i / d.length;
+
+      if (f < prog) {
+        c.fillStyle = 'rgba(255,85,0,.75)';
+      } else {
+        c.fillStyle = 'rgba(120,120,120,.35)';
+      }
+      c.fillRect(x, (H - h) / 2, Math.max(1, bw - .8), h);
+    }
+
+    // Playhead line
+    if (prog > 0 && prog < 1) {
+      const px = prog * W;
+      c.beginPath();
+      c.moveTo(px, 0); c.lineTo(px, H);
+      c.strokeStyle = '#ff5500';
+      c.lineWidth = 1.5;
+      c.stroke();
+    }
+  }
+
+  // ─── Main Loop ───
+  loop() {
+    const now = performance.now();
+
+    // Disc physics
+    if (this.discDrag) {
+      // While dragging, speed follows user input directly — no auto-spin
+      this.speed *= .5; // dampen any existing momentum
+    } else {
+      // Momentum from flick
+      if (Math.abs(this.discMomentum) > 0.2) {
+        this.angle += this.discMomentum;
+        this.discMomentum *= .95; // decay
+
+        // Update speed ring indicator
+        const ring = $('speedRing');
+        if (this.discMomentum > 2) ring.className = 'speed-ring ff';
+        else if (this.discMomentum < -2) ring.className = 'speed-ring rew';
+        else ring.className = 'speed-ring';
+      } else {
+        this.discMomentum = 0;
+        $('speedRing').className = 'speed-ring';
+        // Normal speed from state
+        this.speed += (this.targetSpeed - this.speed) * .06;
+        this.angle += this.speed;
+      }
+    }
+
+    // VU
+    if (this.analyser && (this.state === S.REC || this.state === S.PLAY)) {
+      const arr = new Uint8Array(this.analyser.frequencyBinCount);
+      this.analyser.getByteFrequencyData(arr);
+      let s = 0; for (let i = 0; i < arr.length; i++) s += arr[i];
+      this.vuTarget = s / arr.length / 255;
+    } else {
+      this.vuTarget = 0;
+    }
+    this.vu += (this.vuTarget - this.vu) * .18;
+
+    // Time display
+    if (this.state === S.REC) {
+      if (!this.recPaused) {
+        this.recElapsed = now - this.recStart - this.recPauseTotal;
+      }
+      $('dTime').textContent = this.fmtTime(this.recElapsed / 1000);
+    } else if (this.state === S.PLAY) {
+      const pos = this.getPlayPos();
+      $('dTime').textContent = this.fmtTime(pos);
+    }
+    // SCRUB time is updated in onDiscRotate
+
+    this.drawDisc();
+    this.drawVU();
+    if (this.state === S.PLAY || this.state === S.SCRUB ||
+        (this.state === S.IDLE && this.playOff > 0)) {
+      this.drawWave();
+    }
+
+    requestAnimationFrame(() => this.loop());
+  }
+}
+
+new TP7();
+</script>
+</body>
+</html>
